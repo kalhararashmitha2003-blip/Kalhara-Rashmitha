@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Booking": {
+      "title": "Booking",
+      "description": "A client booking for a photography service.",
+      "type": "object",
+      "properties": {
+        "serviceType": { "type": "string", "description": "The type of service booked." },
+        "date": { "type": "string", "format": "date", "description": "The date of the booking." },
+        "time": { "type": "string", "description": "The time of the booking." },
+        "clientName": { "type": "string", "description": "The name of the client." },
+        "clientEmail": { "type": "string", "format": "email", "description": "The email of the client." },
+        "clientPhone": { "type": "string", "description": "The phone number of the client." },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled"], "description": "The status of the booking." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the booking was created." }
+      },
+      "required": ["serviceType", "date", "time", "clientName", "clientEmail", "clientPhone", "status", "createdAt"]
+    },
+    "Testimonial": {
+      "title": "Testimonial",
+      "description": "A client review of the studio's services.",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string", "description": "The name or initial of the client." },
+        "review": { "type": "string", "description": "The text of the review." },
+        "rating": { "type": "number", "description": "The rating given by the client (1-5)." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the testimonial was submitted." }
+      },
+      "required": ["clientName", "review", "rating", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Collection of client bookings."
+    },
+    "/testimonials/{testimonialId}": {
+      "schema": "Testimonial",
+      "description": "Collection of client testimonials."
+    }
+  }
+}

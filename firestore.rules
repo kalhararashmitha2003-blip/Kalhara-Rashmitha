@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: bookings
+    // Fields:
+    //   - serviceType: string (required, size < 100)
+    //   - date: string (required, format: YYYY-MM-DD)
+    //   - time: string (required, size < 50)
+    //   - clientName: string (required, size < 100)
+    //   - clientEmail: string (required, email format)
+    //   - clientPhone: string (required, size < 20)
+    //   - status: string (required, enum: ['pending', 'confirmed', 'cancelled'])
+    //   - createdAt: timestamp (required, recent)
+    //
+    // Collection: testimonials
+    // Fields:
+    //   - clientName: string (required, size < 50)
+    //   - review: string (required, size < 500)
+    //   - rating: number (required, 1-5)
+    //   - createdAt: timestamp (required, recent)
+    //
+    // Collection: users
+    // Fields:
+    //   - role: string (required, enum: ['admin', 'client'])
+    //   - email: string (required)
+    //   - name: string (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "kalhararashmitha2003@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isRecent(ts) {
+      return ts is timestamp && 
+             ts > request.time - duration.value(5, 'm') && 
+             ts <= request.time;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDate(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidBooking(data) {
+      return data.keys().hasAll(['serviceType', 'date', 'time', 'clientName', 'clientEmail', 'clientPhone', 'status', 'createdAt']) &&
+             data.keys().hasOnly(['serviceType', 'date', 'time', 'clientName', 'clientEmail', 'clientPhone', 'status', 'createdAt']) &&
+             data.serviceType is string && data.serviceType.size() < 100 &&
+             isValidDate(data.date) &&
+             data.time is string && data.time.size() < 50 &&
+             data.clientName is string && data.clientName.size() < 100 &&
+             isValidEmail(data.clientEmail) &&
+             data.clientPhone is string && data.clientPhone.size() < 20 &&
+             data.status in ['pending', 'confirmed', 'cancelled'] &&
+             isRecent(data.createdAt);
+    }
+
+    function isValidTestimonial(data) {
+      return data.keys().hasAll(['clientName', 'review', 'rating', 'createdAt']) &&
+             data.keys().hasOnly(['clientName', 'review', 'rating', 'createdAt']) &&
+             data.clientName is string && data.clientName.size() < 50 &&
+             data.review is string && data.review.size() < 500 &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             isRecent(data.createdAt);
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['role', 'email']) &&
+             data.keys().hasOnly(['role', 'email', 'name']) &&
+             data.role in ['admin', 'client'] &&
+             isValidEmail(data.email) &&
+             (!('name' in data) || (data.name is string && data.name.size() < 100));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /bookings/{bookingId} {
+      allow create: if isValidBooking(request.resource.data) && 
+                      request.resource.data.status == 'pending';
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /testimonials/{testimonialId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidTestimonial(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      // Allow users to create their own profile as 'client'
+      allow create: if isOwner(userId) && 
+                      isValidUser(request.resource.data) && 
+                      request.resource.data.role == 'client';
+      // Only admins can change roles or update other users
+      allow update: if isAdmin() && isValidUser(request.resource.data);
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}
